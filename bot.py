@@ -160,7 +160,5 @@ def group_moderation(message):
 if __name__ == "__main__":
     keep_alive()
     print("🚀 بدء تشغيل بوت ZenoX عبر Telebot...")
-    bot.infinity_polling()
-
-
+    bot.infinity_polling(skip_pending=True)
 
