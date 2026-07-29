@@ -15,7 +15,7 @@ BOT_NAME = "RADAR"
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 
-# ================= نظام حفظ البيانات (لا تضيع البيانات لو انطفأ البوت) =================
+# ================= نظام حفظ البيانات (حفظ دائم) =================
 DATA_FILE = "users.json"
 
 def load_data():
@@ -63,16 +63,17 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# ================= دوال التحقق =================
+# ================= دوال التحقق الصارمة =================
 def is_subscribed(user_id):
     if user_id == DEV_ID:
         return True
     try:
         member = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
+        # التأكد أن العضو ليس مغادراً أو محظوراً
         return member.status in ['creator', 'administrator', 'member']
     except Exception:
-        # إذا حدث خطأ في فحص القناة (مثل عدم كون البوت مشرفاً فيها)، نسمح بالمرور مؤقتاً لتجنب تعطل البوت
-        return True
+        # إذا لم يكن مشتركاً أو حدث خطأ في جلب العضو، يعتبر غير مشترك
+        return False
 
 def is_admin(chat_id, user_id):
     if user_id == DEV_ID:
@@ -103,24 +104,11 @@ def get_welcome_keyboard(user_id):
         kb.add(InlineKeyboardButton("👑 أنت تستخدم النسخة المدفوعة", callback_data="premium_info"))
     return kb
 
-# ================= معالجة أمر /start والرسائل الخاصة =================
-@bot.message_handler(commands=['start'])
-def start_command(message):
-    user_id = message.from_user.id
-    add_user(user_id) # حفظ المستخدم في قاعدة البيانات المحلية بشكل دائم
-    
-    if not is_subscribed(user_id):
-        bot.send_message(
-            message.chat.id,
-            f"⚠️ *عذراً، عليك الاشتراك في قناة البوت أولاً لتتمكن من استخدامه.*\n\nقناة البوت: @{CHANNEL_USERNAME}",
-            reply_markup=get_force_sub_keyboard()
-        )
-        return
-
+# ================= دالة إرسال الترحيب =================
+def send_welcome_message(chat_id, user_id, first_name):
     status_badge = "👑 (مستخدم مميز)" if is_premium_user(user_id) else "✨ (نسخة مجانية)"
-    
     welcome_text = (
-        f"👋 أهلاً بك يا [{message.from_user.first_name}](tg://user?id={user_id}) في بوت *{BOT_NAME}*!\n\n"
+        f"👋 أهلاً بك يا [{first_name}](tg://user?id={user_id}) في بوت *{BOT_NAME}*!\n\n"
         f"🛡️ حالتك الحالية: {status_badge}\n"
         "🤖 أنا بوت متخصص في حماية مجموعتك بكفاءة عالية وسرعة خارقة.\n"
         "🚫 أقوم بحذف الروابط، المعرفات، والسبام فوراً دون تدخل منك.\n\n"
@@ -129,7 +117,25 @@ def start_command(message):
         "2. ارفعني كـ *مشرف (Admin)* بصلاحية حذف الرسائل وحظر المستخدمين.\n"
         "3. سأبدأ العمل تلقائياً بصمت!"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=get_welcome_keyboard(user_id))
+    bot.send_message(chat_id, welcome_text, reply_markup=get_welcome_keyboard(user_id))
+
+# ================= معالجة أمر /start والرسائل الخاصة =================
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    user_id = message.from_user.id
+    add_user(user_id)
+    
+    # فحص الاشتراك الإجباري أولاً وقبل كل شيء
+    if not is_subscribed(user_id):
+        bot.send_message(
+            message.chat.id,
+            f"⚠️ *عذراً، عليك الاشتراك في قناة البوت أولاً لتتمكن من استخدامه.*\n\nقناة البوت: @{CHANNEL_USERNAME}",
+            reply_markup=get_force_sub_keyboard()
+        )
+        return
+
+    # إذا كان مشتركاً، نعرض له الترحيب فوراً
+    send_welcome_message(message.chat.id, user_id, message.from_user.first_name)
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def callback_check_sub(call):
@@ -139,9 +145,9 @@ def callback_check_sub(call):
             bot.delete_message(call.message.chat.id, call.message.message_id)
         except Exception:
             pass
-        bot.send_message(call.message.chat.id, "✅ *تم التحقق بنجاح!* أرسل /start لعرض القائمة الرئيسية.", reply_markup=get_welcome_keyboard(user_id))
+        send_welcome_message(call.message.chat.id, user_id, call.from_user.first_name)
     else:
-        bot.answer_callback_query(call.id, "❌ لم تقم بالاشتراك بعد! اشترك ثم حاول مجدداً.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ لم تقم بالاشتراك بعد في القناة! اشترك ثم اضغط تحقق مجدداً.", show_alert=True)
 
 # ================= نظام النجوم (Telegram Stars) =================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_premium")
@@ -153,7 +159,7 @@ def callback_buy_premium(call):
         title="ترقية RADAR 👑",
         description="احصل على ميزات مدفوعة مثل: تخصيص أوامر الحذف، رسالة ترحيب خاصة، وإلغاء القيود.",
         invoice_payload="premium_radar_payload",
-        provider_token="", # النجوم لا تحتاج بروفايدر خارجي
+        provider_token="",
         currency="XTR",
         prices=prices,
         start_parameter="premium_sub"
@@ -170,7 +176,7 @@ def checkout(query):
 @bot.message_handler(content_types=['successful_payment'])
 def got_payment(message):
     user_id = message.from_user.id
-    make_premium(user_id) # حفظ حالة الدفع في قاعدة البيانات بشكل دائم
+    make_premium(user_id)
     bot.send_message(message.chat.id, "🎉 *شكراً لك! تم الدفع بنجاح.*\n👑 لقد أصبحت الآن من مستخدمي Premium وتم تفعيل جميع الميزات لك بشكل دائم.")
 
 # ================= محرك المراقبة والحماية (الجروبات) =================
@@ -192,7 +198,7 @@ def group_moderation(message):
                 bot.reply_to(message, "❌ حدث خطأ، تأكد أن البوت يمتلك صلاحية الحظر.")
                 return
 
-    # 2. فلترة الروابط والمعرفات (المستثنى فقط المشرفين ومستخدمو البوت المميزون)
+    # 2. فلترة الروابط والمعرفات
     if is_admin(chat_id, user_id) or is_premium_user(user_id):
         return
 
@@ -210,5 +216,6 @@ if __name__ == "__main__":
     keep_alive()
     print(f"🚀 بدء تشغيل بوت {BOT_NAME} بنجاح تام...")
     bot.infinity_polling(skip_pending=True)
+
 
 
