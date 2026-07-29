@@ -216,6 +216,3 @@ if __name__ == "__main__":
     keep_alive()
     print(f"🚀 بدء تشغيل بوت {BOT_NAME} بنجاح تام...")
     bot.infinity_polling(skip_pending=True)
-
-
-
