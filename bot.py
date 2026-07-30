@@ -6,16 +6,16 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice
 
 # ================= الإعدادات الأساسية =================
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "") # تأكد من وضع التوكن في إعدادات Render
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "") # توكن البوت من بيئة ريندر
 DEV_ID = 6043858925
 CHANNEL_USERNAME = "ZenoX_Tools"
 CHANNEL_URL = f"https://t.me/{CHANNEL_USERNAME}"
-BOT_USERNAME = "RA_G_bot" # عدل هذا ليتطابق مع يوزر بوتك
+BOT_USERNAME = "RA_G_bot" 
 BOT_NAME = "RADAR"
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 
-# ================= نظام حفظ البيانات (حفظ دائم) =================
+# ================= نظام حفظ البيانات =================
 DATA_FILE = "users.json"
 
 def load_data():
@@ -23,7 +23,7 @@ def load_data():
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except:
             return {"users": [], "premium": [], "settings": {}}
     return {"users": [], "premium": [], "settings": {}}
 
@@ -31,12 +31,10 @@ def save_data(data):
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-    except Exception:
+    except:
         pass
 
 db_data = load_data()
-if "settings" not in db_data:
-    db_data["settings"] = {}
 
 def add_user(user_id):
     if user_id not in db_data["users"]:
@@ -48,51 +46,47 @@ def make_premium(user_id):
         db_data["premium"].append(user_id)
         save_data(db_data)
 
-def is_premium_user(user_id):
+def is_premium(user_id):
     return user_id in db_data["premium"] or user_id == DEV_ID
 
-# ================= سيرفر البقاء (Render + UptimeRobot) =================
+# ================= سيرفر البقاء (Render Fix) =================
 app = Flask('')
 
 @app.route('/')
 def home():
-    return f"🚀 {BOT_NAME} System is Online and Running Perfectly!"
+    return f"🚀 {BOT_NAME} System is Online!"
 
 def run():
-    # ضروري جداً لـ Render لكي لا يغلق السيرفر
+    # هذا السطر مهم جداً لنجاح النشر في Render
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
-    t = Thread(target=run)
-    t.daemon = True # لجعل الثريد يعمل في الخلفية بدون مشاكل
+    t = Thread(target=run, daemon=True)
     t.start()
 
-# ================= دوال التحقق الصارمة =================
+# ================= دوال التحقق =================
 def is_subscribed(user_id):
-    if user_id == DEV_ID:
-        return True
+    if user_id == DEV_ID: return True
     try:
         member = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
         return member.status in ['creator', 'administrator', 'member']
-    except Exception as e:
-        # إذا كان البوت ليس أدمن في القناة، سيعطي خطأ. تأكد من رفعه كأدمن!
-        return False
+    except Exception:
+        return False # إذا لم يكن مشتركاً أو البوت ليس أدمن في القناة
 
 def is_admin(chat_id, user_id):
-    if user_id == DEV_ID:
-        return True
+    if user_id == DEV_ID: return True
     try:
         member = bot.get_chat_member(chat_id, user_id)
         return member.status in ['creator', 'administrator']
-    except Exception:
+    except:
         return False
 
 # ================= لوحات الأزرار =================
 def get_force_sub_keyboard():
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("📢 اضغط هنا للاشتراك في القناة", url=CHANNEL_URL))
-    kb.add(InlineKeyboardButton("🔄 تحقق من الاشتراك", callback_data="check_sub"))
+    kb.row(InlineKeyboardButton("📢 اضغط هنا للاشتراك في القناة", url=CHANNEL_URL))
+    kb.row(InlineKeyboardButton("🔄 تحقق من الاشتراك", callback_data="check_sub"))
     return kb
 
 def get_welcome_keyboard(user_id):
@@ -102,78 +96,85 @@ def get_welcome_keyboard(user_id):
         InlineKeyboardButton("📢 قناة البوت", url=CHANNEL_URL),
         InlineKeyboardButton("🔄 مشاركة", url=f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}&text=أفضل بوت لحماية الجروبات!")
     )
-    if not is_premium_user(user_id):
-        kb.add(InlineKeyboardButton("⭐ الترقية إلى (Premium)", callback_data="buy_premium"))
+    if not is_premium(user_id):
+        kb.add(InlineKeyboardButton("⭐ ترقية إلى RADAR Pro", callback_data="buy_premium"))
     else:
-        kb.add(InlineKeyboardButton("👑 أنت تستخدم النسخة المدفوعة", callback_data="premium_info"))
+        kb.add(InlineKeyboardButton("👑 أنت تستخدم نسخة Pro", callback_data="premium_info"))
     return kb
 
-# ================= رسالة الترحيب =================
 def send_welcome_message(chat_id, user_id, first_name):
-    status_badge = "👑 مستخدم مميز (Premium)" if is_premium_user(user_id) else "✨ مستخدم مجاني"
-    welcome_text = (
-        f"👋 أهلاً بك يا [{first_name}](tg://user?id={user_id}) في نظام *{BOT_NAME}*!\n\n"
-        f"🛡️ *حالتك:* {status_badge}\n\n"
-        "🤖 أنا حارس مجموعتك الشخصي، أعمل بكفاءة وسرعة لتنظيف الجروب من:\n"
-        "🚫 الروابط، المعرفات، التوجيهات، ورسائل الانضمام المزعجة.\n\n"
-        "💡 *طريقة الاستخدام:*\n"
+    badge = "👑 (Pro)" if is_premium(user_id) else "✨ (مجاني)"
+    text = (
+        f"👋 أهلاً بك يا [{first_name}](tg://user?id={user_id})\n\n"
+        f"🛡️ *حالتك:* {badge}\n"
+        "🤖 أنا بوت حماية متقدم، أنظف مجموعتك من الروابط والسبام فوراً بصمت.\n\n"
+        "💡 *طريقة العمل:*\n"
         "1. أضفني للجروب.\n"
-        "2. ارفعني كـ *مشرف (Admin)*.\n"
-        "3. استرخي، وسأقوم بالباقي بصمت!"
+        "2. ارفعني كـ *مشرف*.\n"
+        "3. سأعمل تلقائياً!"
     )
-    bot.send_message(chat_id, welcome_text, reply_markup=get_welcome_keyboard(user_id))
+    bot.send_message(chat_id, text, reply_markup=get_welcome_keyboard(user_id))
 
-# ================= أوامر البداية والاشتراك =================
-@bot.message_handler(commands=['start'])
-def start_command(message):
-    if message.chat.type != 'private':
-        return
-        
+# ================= معالجة جميع رسائل الخاص =================
+# هذه الدالة تتفاعل مع /start وأي نص أو صورة أو ملصق يرسله المستخدم في الخاص
+@bot.message_handler(func=lambda m: m.chat.type == 'private', content_types=['text', 'photo', 'video', 'document', 'sticker', 'voice'])
+def private_messages_handler(message):
     user_id = message.from_user.id
     add_user(user_id)
     
+    # إذا لم يكن مشتركاً، نوقفه هنا ونطلب الاشتراك
     if not is_subscribed(user_id):
         bot.send_message(
             message.chat.id,
-            f"⚠️ *عذراً عزيزي، لا يمكنك استخدام البوت!*\n\nيجب عليك الاشتراك في قناتنا الرسمية أولاً لتتمكن من تفعيل الخدمات.\nقناة البوت: @{CHANNEL_USERNAME}",
+            "⚠️ *عذراً، يجب عليك الاشتراك في قناة البوت أولاً.*\n\nاشترك من الزر بالأسفل ثم اضغط (تحقق من الاشتراك) 👇",
             reply_markup=get_force_sub_keyboard()
         )
         return
 
+    # إذا كان مشتركاً، نعرض الترحيب
     send_welcome_message(message.chat.id, user_id, message.from_user.first_name)
 
+# ================= زر التحقق من الاشتراك =================
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def callback_check_sub(call):
     user_id = call.from_user.id
     if is_subscribed(user_id):
-        try:
-            bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception:
-            pass
-        bot.answer_callback_query(call.id, "✅ تم التحقق بنجاح! شكراً لاشتراكك.", show_alert=False)
+        bot.delete_message(call.message.chat.id, call.message.message_id) # مسح رسالة التحذير
+        bot.answer_callback_query(call.id, "✅ تم التحقق، شكراً لاشتراكك!")
         send_welcome_message(call.message.chat.id, user_id, call.from_user.first_name)
     else:
-        bot.answer_callback_query(call.id, "❌ لم تقم بالاشتراك بعد! اشترك ثم اضغط تحقق مجدداً.", show_alert=True)
+        bot.answer_callback_query(call.id, "❌ أنت لم تشترك بعد! اشترك ثم اضغط تحقق.", show_alert=True)
 
-# ================= نظام النجوم (Telegram Stars) =================
+# ================= نظام Pro والنجوم =================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_premium")
 def callback_buy_premium(call):
     bot.answer_callback_query(call.id)
-    prices = [LabeledPrice("اشتراك RADAR Premium دائم", 50)]
+    
+    # رسالة توضيحية لـ RADAR Pro
+    pro_info = (
+        "💎 *ميزات RADAR Pro:*\n\n"
+        "1️⃣ *حصانة تامة:* لن يحذف البوت روابطك أو رسائلك في أي جروب.\n"
+        "2️⃣ *أوامر المشرفين:* يمكنك إرسال (قفل الروابط) أو (فتح الروابط) للتحكم بالجروب.\n"
+        "3️⃣ *أولوية وسرعة:* استجابة فورية خالية من القيود.\n\n"
+        "💳 *الدفع عبر نجوم تيليجرام (مرة واحدة فقط للأبد)* 👇"
+    )
+    bot.send_message(call.message.chat.id, pro_info)
+    
+    # إرسال الفاتورة
     bot.send_invoice(
         chat_id=call.message.chat.id,
-        title="ترقية RADAR 👑",
-        description="ميزات الـ Premium: حصانة من الحذف، تفعيل أوامر إضافية مثل (قفل الروابط)، وتجربة خالية من القيود.",
-        invoice_payload="premium_radar_payload",
-        provider_token="", # يترك فارغاً لنجوم تيليجرام
+        title="ترقية RADAR Pro 👑",
+        description="احصل على الحصانة وأوامر التحكم الكاملة مدى الحياة.",
+        invoice_payload="premium_radar",
+        provider_token="", 
         currency="XTR",
-        prices=prices,
-        start_parameter="premium_sub"
+        prices=[LabeledPrice("اشتراك Pro دائم", 50)],
+        start_parameter="pro_sub"
     )
 
 @bot.callback_query_handler(func=lambda call: call.data == "premium_info")
 def callback_premium_info(call):
-    bot.answer_callback_query(call.id, "👑 أنت تمتلك صلاحيات الـ Premium الكاملة! جميع ميزات البوت مفعلة لديك تلقائياً.", show_alert=True)
+    bot.answer_callback_query(call.id, "👑 أنت تمتلك نسخة Pro! جميع الميزات مفعلة.", show_alert=True)
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def checkout(query):
@@ -181,75 +182,48 @@ def checkout(query):
 
 @bot.message_handler(content_types=['successful_payment'])
 def got_payment(message):
-    user_id = message.from_user.id
-    make_premium(user_id)
-    bot.send_message(message.chat.id, "🎉 *عملية دفع ناجحة!*\n👑 مبروك! لقد أصبحت الآن من مستخدمي Premium وتم تفعيل جميع الميزات لك بشكل دائم.")
+    make_premium(message.from_user.id)
+    bot.send_message(message.chat.id, "🎉 *تم الدفع بنجاح!*\n👑 مبروك، أنت الآن مستخدم Pro وتم تفعيل جميع الميزات.")
 
-# ================= محرك الحماية والمراقبة (للجروبات) =================
-
-# 1. مسح رسائل الانضمام والمغادرة المزعجة
-@bot.message_handler(content_types=['new_chat_members', 'left_chat_member'])
-def clean_service_messages(message):
-    try:
-        bot.delete_message(message.chat.id, message.message_id)
-    except Exception:
-        pass
-
-# 2. مراقبة النصوص والصور والفيديوهات للحماية
-@bot.message_handler(func=lambda message: message.chat.type in ['group', 'supergroup'], content_types=['text', 'photo', 'video', 'document', 'audio', 'animation'])
+# ================= حماية الجروبات =================
+@bot.message_handler(func=lambda m: m.chat.type in ['group', 'supergroup'], content_types=['text', 'photo', 'video', 'document', 'new_chat_members', 'left_chat_member'])
 def group_moderation(message):
     chat_id = message.chat.id
     user_id = message.from_user.id
-    chat_id_str = str(chat_id)
+    chat_str = str(chat_id)
     text = message.text or message.caption or ""
 
-    # أوامر المشرفين السريعة
-    if message.reply_to_message:
-        if text in ["طرد", "ازالة", "حظر", "كتم"]:
-            if is_admin(chat_id, user_id):
-                target_user = message.reply_to_message.from_user
-                try:
-                    if text in ["طرد", "ازالة", "حظر"]:
-                        bot.ban_chat_member(chat_id, target_user.id)
-                        bot.reply_to(message, f"✅ تم طرد [{target_user.first_name}](tg://user?id={target_user.id}) بنجاح.")
-                    elif text == "كتم":
-                        bot.restrict_chat_member(chat_id, target_user.id, can_send_messages=False)
-                        bot.reply_to(message, f"🔇 تم كتم [{target_user.first_name}](tg://user?id={target_user.id}).")
-                    return
-                except Exception:
-                    bot.reply_to(message, "❌ البوت لا يملك صلاحيات كافية (تأكد من رفعه كمشرف بجميع الصلاحيات).")
-                    return
-
-    # أوامر إضافية لمستخدمي Premium والأدمنز
-    if is_admin(chat_id, user_id) or is_premium_user(user_id):
-        if text == "قفل الروابط":
-            db_data["settings"][chat_id_str] = "locked"
-            save_data(db_data)
-            bot.reply_to(message, "🔒 تم قفل الروابط في هذه المجموعة.")
-        elif text == "فتح الروابط":
-            db_data["settings"][chat_id_str] = "unlocked"
-            save_data(db_data)
-            bot.reply_to(message, "🔓 تم السماح بالروابط في هذه المجموعة.")
-        # المشرفون وحاملو الـ Premium مستثنون من الفلترة
+    # مسح رسائل الدخول والخروج
+    if message.content_type in ['new_chat_members', 'left_chat_member']:
+        try: bot.delete_message(chat_id, message.message_id)
+        except: pass
         return
 
-    # فلترة الروابط والمعرفات للأعضاء العاديين
-    links_locked = db_data["settings"].get(chat_id_str, "locked") == "locked"
-    
-    if links_locked and message.entities:
+    # أوامر Pro / الإدارة (قفل وفتح)
+    if is_admin(chat_id, user_id) or is_premium(user_id):
+        if text == "قفل الروابط":
+            db_data["settings"][chat_str] = "locked"
+            save_data(db_data)
+            bot.reply_to(message, "🔒 تم قفل الروابط.")
+        elif text == "فتح الروابط":
+            db_data["settings"][chat_str] = "unlocked"
+            save_data(db_data)
+            bot.reply_to(message, "🔓 تم السماح بالروابط.")
+        return # تخطي الفلترة للأدمن والـ Pro
+
+    # فلترة الروابط للأعضاء العاديين
+    if db_data["settings"].get(chat_str, "locked") == "locked" and message.entities:
         for entity in message.entities:
-            # حظر الروابط، المعرفات، والإيميلات
             if entity.type in ['url', 'text_link', 'mention', 'email']:
                 try:
                     bot.delete_message(chat_id, message.message_id)
                     return
-                except Exception:
-                    pass
+                except: pass
 
 # ================= تشغيل النظام =================
 if __name__ == "__main__":
     keep_alive()
-    print(f"🚀 بدء تشغيل بوت {BOT_NAME} بنجاح تام...")
-    # زيادة استقرار الاتصال مع سيرفرات تيليجرام
-    bot.infinity_polling(skip_pending=True, timeout=20, long_polling_timeout=15)
+    print(f"🚀 بدء تشغيل {BOT_NAME}...")
+    # skip_pending=False : لجعل البوت ينفذ الرسائل اللي وصلته وهو طافي
+    bot.infinity_polling(skip_pending=False, timeout=20)
 
