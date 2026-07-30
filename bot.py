@@ -6,8 +6,8 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice
 
 # ================= الإعدادات الأساسية =================
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "") # توكن البوت من بيئة ريندر
-DEV_ID = 6043858925
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "") 
+DEV_ID = int(os.environ.get("DEV_ID", 6043858925)) # تأكد أن هذا الأيدي الخاص بك
 CHANNEL_USERNAME = "ZenoX_Tools"
 CHANNEL_URL = f"https://t.me/{CHANNEL_USERNAME}"
 BOT_USERNAME = "RA_G_bot" 
@@ -54,10 +54,9 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return f"🚀 {BOT_NAME} System is Online!"
+    return f"🚀 {BOT_NAME} System is Online and Pro Features Active!"
 
 def run():
-    # هذا السطر مهم جداً لنجاح النشر في Render
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
 
@@ -71,8 +70,8 @@ def is_subscribed(user_id):
     try:
         member = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
         return member.status in ['creator', 'administrator', 'member']
-    except Exception:
-        return False # إذا لم يكن مشتركاً أو البوت ليس أدمن في القناة
+    except:
+        return False
 
 def is_admin(chat_id, user_id):
     if user_id == DEV_ID: return True
@@ -96,10 +95,18 @@ def get_welcome_keyboard(user_id):
         InlineKeyboardButton("📢 قناة البوت", url=CHANNEL_URL),
         InlineKeyboardButton("🔄 مشاركة", url=f"https://t.me/share/url?url=https://t.me/{BOT_USERNAME}&text=أفضل بوت لحماية الجروبات!")
     )
+    # الزر الجديد للتعليمات
+    kb.add(InlineKeyboardButton("📖 التعليمات (كيف يعمل البوت؟)", callback_data="instructions"))
+    
     if not is_premium(user_id):
         kb.add(InlineKeyboardButton("⭐ ترقية إلى RADAR Pro", callback_data="buy_premium"))
     else:
         kb.add(InlineKeyboardButton("👑 أنت تستخدم نسخة Pro", callback_data="premium_info"))
+    return kb
+
+def get_back_keyboard():
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("⬅️ رجوع للقائمة الرئيسية", callback_data="back_home"))
     return kb
 
 def send_welcome_message(chat_id, user_id, first_name):
@@ -115,14 +122,12 @@ def send_welcome_message(chat_id, user_id, first_name):
     )
     bot.send_message(chat_id, text, reply_markup=get_welcome_keyboard(user_id))
 
-# ================= معالجة جميع رسائل الخاص =================
-# هذه الدالة تتفاعل مع /start وأي نص أو صورة أو ملصق يرسله المستخدم في الخاص
+# ================= معالجة رسائل الخاص =================
 @bot.message_handler(func=lambda m: m.chat.type == 'private', content_types=['text', 'photo', 'video', 'document', 'sticker', 'voice'])
 def private_messages_handler(message):
     user_id = message.from_user.id
     add_user(user_id)
     
-    # إذا لم يكن مشتركاً، نوقفه هنا ونطلب الاشتراك
     if not is_subscribed(user_id):
         bot.send_message(
             message.chat.id,
@@ -131,36 +136,66 @@ def private_messages_handler(message):
         )
         return
 
-    # إذا كان مشتركاً، نعرض الترحيب
     send_welcome_message(message.chat.id, user_id, message.from_user.first_name)
 
-# ================= زر التحقق من الاشتراك =================
+# ================= أزرار الواجهة (التنقل) =================
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def callback_check_sub(call):
     user_id = call.from_user.id
     if is_subscribed(user_id):
-        bot.delete_message(call.message.chat.id, call.message.message_id) # مسح رسالة التحذير
+        bot.delete_message(call.message.chat.id, call.message.message_id) 
         bot.answer_callback_query(call.id, "✅ تم التحقق، شكراً لاشتراكك!")
         send_welcome_message(call.message.chat.id, user_id, call.from_user.first_name)
     else:
         bot.answer_callback_query(call.id, "❌ أنت لم تشترك بعد! اشترك ثم اضغط تحقق.", show_alert=True)
 
+@bot.callback_query_handler(func=lambda call: call.data == "instructions")
+def callback_instructions(call):
+    text = (
+        "📖 *دليل تعليمات RADAR* 📖\n\n"
+        "✨ *النسخة المجانية (للمشرفين فقط):*\n"
+        "• تنظيف صامت لتنبيهات الدخول والخروج.\n"
+        "• فلترة الروابط والمعرفات التلقائية.\n"
+        "• إعدادات الجروب: `قفل الروابط` | `فتح الروابط`.\n"
+        "• *أمر مميز:* `مسح` (بالرد على أي رسالة لحذفها فوراً).\n\n"
+        "👑 *نسخة RADAR Pro (للمشتركين):*\n"
+        "• *حصانة تامة:* البوت لا يحذف رسائلك أبداً في أي جروب.\n"
+        "• *أوامر متقدمة (تعمل بالرد على رسالة العضو):* \n"
+        "  ➔ `طرد` : لحظر وطرد العضو من الجروب.\n"
+        "  ➔ `كتم` : لمنع العضو من إرسال رسائل.\n"
+        "  ➔ `الغاء كتم` : للسماح للعضو بالكتابة مجدداً.\n\n"
+        "💡 *ملاحظة:* أوامر Pro تعمل لك في أي جروب حتى لو لم تكن مشرفاً به!"
+    )
+    # تحديث الرسالة بدلاً من إرسال رسالة جديدة لشكل أكثر احترافية
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=get_back_keyboard())
+
+@bot.callback_query_handler(func=lambda call: call.data == "back_home")
+def callback_back_home(call):
+    user_id = call.from_user.id
+    badge = "👑 (Pro)" if is_premium(user_id) else "✨ (مجاني)"
+    text = (
+        f"👋 أهلاً بك يا [{call.from_user.first_name}](tg://user?id={user_id})\n\n"
+        f"🛡️ *حالتك:* {badge}\n"
+        "🤖 أنا بوت حماية متقدم، أنظف مجموعتك من الروابط والسبام فوراً بصمت.\n\n"
+        "💡 *طريقة العمل:*\n"
+        "1. أضفني للجروب.\n"
+        "2. ارفعني كـ *مشرف*.\n"
+        "3. سأعمل تلقائياً!"
+    )
+    bot.edit_message_text(text, call.message.chat.id, call.message.message_id, reply_markup=get_welcome_keyboard(user_id))
+
 # ================= نظام Pro والنجوم =================
 @bot.callback_query_handler(func=lambda call: call.data == "buy_premium")
 def callback_buy_premium(call):
     bot.answer_callback_query(call.id)
-    
-    # رسالة توضيحية لـ RADAR Pro
     pro_info = (
         "💎 *ميزات RADAR Pro:*\n\n"
         "1️⃣ *حصانة تامة:* لن يحذف البوت روابطك أو رسائلك في أي جروب.\n"
-        "2️⃣ *أوامر المشرفين:* يمكنك إرسال (قفل الروابط) أو (فتح الروابط) للتحكم بالجروب.\n"
+        "2️⃣ *أوامر المشرفين:* يمكنك إرسال (طرد، كتم، قفل، فتح) والتحكم الكامل.\n"
         "3️⃣ *أولوية وسرعة:* استجابة فورية خالية من القيود.\n\n"
         "💳 *الدفع عبر نجوم تيليجرام (مرة واحدة فقط للأبد)* 👇"
     )
     bot.send_message(call.message.chat.id, pro_info)
-    
-    # إرسال الفاتورة
     bot.send_invoice(
         chat_id=call.message.chat.id,
         title="ترقية RADAR Pro 👑",
@@ -174,7 +209,7 @@ def callback_buy_premium(call):
 
 @bot.callback_query_handler(func=lambda call: call.data == "premium_info")
 def callback_premium_info(call):
-    bot.answer_callback_query(call.id, "👑 أنت تمتلك نسخة Pro! جميع الميزات مفعلة.", show_alert=True)
+    bot.answer_callback_query(call.id, "👑 أنت تمتلك نسخة Pro! جميع الميزات والأوامر مفعلة.", show_alert=True)
 
 @bot.pre_checkout_query_handler(func=lambda query: True)
 def checkout(query):
@@ -185,7 +220,7 @@ def got_payment(message):
     make_premium(message.from_user.id)
     bot.send_message(message.chat.id, "🎉 *تم الدفع بنجاح!*\n👑 مبروك، أنت الآن مستخدم Pro وتم تفعيل جميع الميزات.")
 
-# ================= حماية الجروبات =================
+# ================= حماية الجروبات وأوامر المشرفين =================
 @bot.message_handler(func=lambda m: m.chat.type in ['group', 'supergroup'], content_types=['text', 'photo', 'video', 'document', 'new_chat_members', 'left_chat_member'])
 def group_moderation(message):
     chat_id = message.chat.id
@@ -193,25 +228,56 @@ def group_moderation(message):
     chat_str = str(chat_id)
     text = message.text or message.caption or ""
 
-    # مسح رسائل الدخول والخروج
+    # مسح رسائل الدخول والخروج بصمت
     if message.content_type in ['new_chat_members', 'left_chat_member']:
         try: bot.delete_message(chat_id, message.message_id)
         except: pass
         return
 
-    # أوامر Pro / الإدارة (قفل وفتح)
+    # 1. أوامر الرد السريعة (تتطلب الرد على رسالة)
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+        
+        # أمر (مسح) - الميزة الجذابة للمشرفين المجانيين (والـ Pro طبعاً)
+        if text == "مسح" and (is_admin(chat_id, user_id) or is_premium(user_id)):
+            try:
+                bot.delete_message(chat_id, message.reply_to_message.message_id) # مسح رسالة العضو
+                bot.delete_message(chat_id, message.message_id) # مسح أمر (مسح) نفسه للنظافة
+            except: pass
+            return
+
+        # أوامر (طرد، كتم، الغاء كتم) حصرية لنسخة Pro
+        if text in ["طرد", "كتم", "الغاء كتم"]:
+            if is_premium(user_id):
+                try:
+                    if text == "طرد":
+                        bot.ban_chat_member(chat_id, target_user.id)
+                        bot.reply_to(message, f"🚨 تم طرد [{target_user.first_name}](tg://user?id={target_user.id}) بواسطة مستخدم Pro.")
+                    elif text == "كتم":
+                        bot.restrict_chat_member(chat_id, target_user.id, can_send_messages=False)
+                        bot.reply_to(message, f"🔇 تم كتم [{target_user.first_name}](tg://user?id={target_user.id}).")
+                    elif text == "الغاء كتم":
+                        bot.restrict_chat_member(chat_id, target_user.id, can_send_messages=True, can_send_media_messages=True, can_send_other_messages=True)
+                        bot.reply_to(message, f"🔊 تم إلغاء كتم [{target_user.first_name}](tg://user?id={target_user.id}).")
+                except Exception:
+                    bot.reply_to(message, "❌ البوت لا يملك صلاحيات كافية (تأكد من رفعه كمشرف بصلاحيات كاملة).")
+            else:
+                bot.reply_to(message, "👑 عذراً، هذا الأمر مخصص لمستخدمي RADAR Pro فقط!")
+            return
+
+    # 2. أوامر إعدادات الجروب (تعمل للمشرفين المجانيين والـ Pro)
     if is_admin(chat_id, user_id) or is_premium(user_id):
         if text == "قفل الروابط":
             db_data["settings"][chat_str] = "locked"
             save_data(db_data)
-            bot.reply_to(message, "🔒 تم قفل الروابط.")
+            bot.reply_to(message, "🔒 تم قفل الروابط بنجاح.")
         elif text == "فتح الروابط":
             db_data["settings"][chat_str] = "unlocked"
             save_data(db_data)
-            bot.reply_to(message, "🔓 تم السماح بالروابط.")
-        return # تخطي الفلترة للأدمن والـ Pro
+            bot.reply_to(message, "🔓 تم السماح بالروابط بنجاح.")
+        return # المشرفون والـ Pro معفيون من فلترة الروابط
 
-    # فلترة الروابط للأعضاء العاديين
+    # 3. فلترة الروابط للأعضاء العاديين
     if db_data["settings"].get(chat_str, "locked") == "locked" and message.entities:
         for entity in message.entities:
             if entity.type in ['url', 'text_link', 'mention', 'email']:
@@ -223,7 +289,8 @@ def group_moderation(message):
 # ================= تشغيل النظام =================
 if __name__ == "__main__":
     keep_alive()
-    print(f"🚀 بدء تشغيل {BOT_NAME}...")
-    # skip_pending=False : لجعل البوت ينفذ الرسائل اللي وصلته وهو طافي
+    print(f"🚀 بدء تشغيل {BOT_NAME} V3.0...")
+    # skip_pending=False : لجعل البوت يحفظ وينفذ رسائل المستخدمين وقت التوقف
     bot.infinity_polling(skip_pending=False, timeout=20)
+
 
